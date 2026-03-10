@@ -5,25 +5,30 @@
 
 ## Instructions for AI Agent
 
-1. **Purpose:** Generate Markdown documentation for the RTL module(s) and/or testbench described in the issue.  
-2. **Files:** Save all documentation files under `docs/` folder, named to match the corresponding module.  
-3. **Content Requirements:** Each documentation file should include:  
-   - Module name and purpose  
-   - Input and output signal descriptions  
-   - High-level description of the functionality (FSM, pipelines, encoding/decoding, etc.)  
-   - References to related testbench(s) and simulation logs  
-   - Notes on coding conventions used  
-4. **Style:**  
-   - Markdown format, headers for sections (## Inputs, ## Outputs, ## Functionality, ## Testbench Reference)  
-   - Bullet points or tables where appropriate for clarity  
-   - Concise, educational style suitable for beginners  
-5. **Output JSON:** Provide a JSON summary with the following keys:  
-   ```json
-   {
-     "doc_files": ["docs/<filename>.md", "..."]
-   }
-6. **Constraints**: Ensure documentation matches the code exactly, follows style guide, and is beginner-friendly.
+You are generating Markdown documentation for RTL modules and testbenches.
 
-**Deliverable**: Fully documented Markdown files describing the RTL/testbench, ready to be included in the repository and linked from PRs.
+1. **File Placement**  
+   - Save docs in `docs/` folder.  
+   - File name matches the module name: `<module>.md`.  
+2. **Content Requirements**  
+   - Sections:  
+     - `## Module Name`  
+     - `## Purpose`  
+     - `## Inputs`  
+     - `## Outputs`  
+     - `## Functionality` (FSM, pipeline, encoding/decoding, etc.)  
+     - `## Testbench Reference`  
+   - Include links to RTL and testbench files.  
+   - Include notes on coding conventions.  
+3. **Style**  
+   - Markdown headers, bullet points, or tables for clarity.  
+   - Concise, educational style suitable for beginners.  
 
-
+## Mandatory JSON Output
+```json
+{
+  "doc_files": ["docs/<module>.md", "..."],
+  "linked_rtl": ["rtl/<module>.v"],
+  "linked_tb": ["tb/<module>_tb.v"],
+  "version": "<issue_number>_<YYYYMMDD>"
+}
