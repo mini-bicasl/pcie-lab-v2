@@ -15,7 +15,7 @@ jobs:
         run: |
           cat ARCHITECTURE.md INTERFACE_SPEC.md TESTPLAN.md NAMING_CONVENTIONS.md > doc_context.md
 
-      - name: Generate Documentation
+      - name: Run AI agent to generate documentation
         uses: github/agents@v1
         with:
           prompt: |
@@ -24,16 +24,25 @@ jobs:
             {{ doc_context.md }}
 
             TASK:
-            Write detailed Markdown documentation for the requested module or system.
-
-            CRITERIA:
-            - Include architecture overview.
-            - Provide module interfaces, ports, and parameters.
-            - Include state machine diagrams in ASCII or Mermaid.
-            - Include timing diagrams if applicable.
-            - Link to relevant RTL files and testbenches.
-            - Provide rationale for design choices and constraints.
-
-            DELIVERABLES:
-            - Markdown file (*.md) in /docs/
+            Generate documentation for module {{module_name}}.
+            Follow doc template instructions, include MANDATORY JSON OUTPUT.
             EOF
+
+      - name: Parse AI JSON output
+        id: parse_json
+        run: |
+          echo "$AGENT_OUTPUT" | jq '.' > agent_doc_output.json
+          plan_completed=$(jq '.plan_item_completed' agent_doc_output.json)
+          if [ "$plan_completed" != "true" ]; then
+            echo "Documentation plan item not completed."
+            gh issue create \
+              --title "Documentation Incomplete: {{module_name}}" \
+              --body "Agent-generated documentation incomplete. JSON output:\n$(cat agent_doc_output.json)"
+            exit 1
+          fi
+
+      - name: Commit documentation
+        run: |
+          git add docs/*.md
+          git commit -m "Add AI-generated documentation for {{module_name}}"
+          git push
