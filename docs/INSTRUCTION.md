@@ -37,7 +37,7 @@ Goal: turn the architecture into a concrete implementation roadmap.
 1. Create a new issue using the **AI Task Form** with:
    - **Select Issue Type**: `Planning`
    - **Module name**: `N/A`
-   - **Issue Description**: e.g.
+   - **Issue Description** (optional, 1–2 sentences is enough): e.g.
      - “Create an implementation plan for the DDR4 controller described in ARCHITECTURE.md. Break it into modules, define dependencies, and specify initial testbench and documentation requirements.”
 2. The AI agent uses `docs/ARCHITECTURE.md` to generate or update **`docs/PLAN.md`**, including:
    - A list of **modules/features** (e.g. `ddr4_ctrl_top`, `phy_if`, `cmd_queue`, `refresh_fsm`, etc.).
@@ -55,9 +55,10 @@ Goal: for each module in the plan, generate RTL, a testbench, and documentation 
 For each module or feature, you only need to provide:
 
 - **The module name** (must match `ARCHITECTURE.md`)
-- **A short description of what you want** (your idea / behavior in plain language)
+- **Optionally, a short description** of what you want (your idea / behavior in plain language)
 
-Everything else (context building, prompts, JSON, PRs) is handled by the automation.
+Everything else (context building, prompts, JSON, PRs) is handled by the automation.  
+If you leave the description very short (or even empty), the agents can still infer behavior from `docs/ARCHITECTURE.md` and `docs/PLAN.md`.
 
 ### 3.1 Create an Implementation issue
 
@@ -67,10 +68,12 @@ For each module (for example `ddr4_ctrl_top`):
 2. Fill in:
    - **Select Issue Type**: `Implementation`
    - **Module name**: the exact name from `ARCHITECTURE.md`, e.g. `ddr4_ctrl_top`.
-   - **Issue Description**: describe the intended behavior for this module, e.g.:
-     - “Implement `ddr4_ctrl_top` as the top-level DDR4 controller. It interfaces to the PHY, schedules commands, enforces timing constraints from TESTPLAN, and exposes a simple request/response interface to the host.”
+   - **Issue Description** (optional):
+     - Minimal: “Implement this module according to ARCHITECTURE.md and PLAN.md.”
+     - Rich (optional): describe the intended behavior for this module, for example:
+       - “Implement `ddr4_ctrl_top` as the top-level DDR4 controller. It interfaces to the PHY, schedules commands, enforces timing constraints from TESTPLAN, and exposes a simple request/response interface to the host.”
 
-You do **not** need to specify file paths or JSON; the workflow will handle that.
+You do **not** need to specify file paths or JSON; the workflow will handle that. The agents will read `ARCHITECTURE.md`, `docs/PLAN.md`, and any optional spec files to understand what to generate.
 
 ### 3.2 What the automation does for an Implementation issue
 
