@@ -9,24 +9,26 @@ steps:
     with:
       github-token: ${{ secrets.GITHUB_TOKEN }}
       script: |
-        const issue = context.payload.issue;
-        if (!issue) return;
-        // Load prompt template
         const fs = require('fs');
+        const path = require('path');
+
+        // Read ARCHITECTURE.md for module details
+        const archFile = 'docs/ARCHITECTURE.md';
+        const archContent = fs.readFileSync(archFile, 'utf8');
+
+        // AI prompt template
         const template = fs.readFileSync('.github/agents/prompt-templates/rtl-template.md', 'utf8');
-        // Construct prompt
-        const prompt = template.replace('{{ISSUE_BODY}}', issue.body);
-        // Call AI service (pseudo-code)
+        const prompt = template.replace('{{ARCHITECTURE_CONTENT}}', archContent);
+
+        // Call AI to generate RTL (pseudo-code)
         const ai_response = await generateRTL(prompt);
-        // Save output files
-        ai_response.files.forEach(f => fs.writeFileSync(f.path, f.content));
-        // Create draft PR with files
-        await github.pulls.create({
-          owner: context.repo.owner,
-          repo: context.repo.repo,
-          head: `ai-rtl/${issue.number}`,
-          base: 'main',
-          title: `[AI] RTL Generation: ${issue.title}`,
-          body: `Generated RTL from issue #${issue.number}`,
-          draft: true
+
+        // Save output RTL files
+        ai_response.files.forEach(f => {
+          const fullPath = path.join(process.cwd(), f.path);
+          fs.mkdirSync(path.dirname(fullPath), { recursive: true });
+          fs.writeFileSync(fullPath, f.content);
         });
+
+        // Optionally update PLAN.md checklist for this module
+        // ...
