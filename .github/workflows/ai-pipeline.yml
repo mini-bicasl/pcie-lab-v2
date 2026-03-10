@@ -1,111 +1,138 @@
-name: AI-Assisted RTL Pipeline
+name: AI-Driven Verilog Lab Pipeline
 
 on:
-  issues:
-    types: [opened]
-  pull_request:
-    types: [opened, labeled, synchronize]
-
-permissions:
-  contents: read
-  issues: write
-  pull-requests: write
+  issue_label:
+    - "rtl requested"
+    - "tb requested"
+    - "doc requested"
 
 jobs:
-  ai-pipeline:
+  rtl_generation:
+    name: RTL Generation
+    runs-on: ubuntu-latest
+    outputs:
+      rtl_json: ${{ steps.parse_json.outputs.agent_json }}
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Load context
+        run: |
+          cat ARCHITECTURE.md INTERFACE_SPEC.md NAMING_CONVENTIONS.md TESTPLAN.md > full_context.md
+
+      - name: Run AI Agent to generate RTL
+        uses: github/agents@v1
+        with:
+          prompt: |
+            <<EOF
+            CONTEXT:
+            {{ full_context.md }}
+
+            TASK:
+            Generate synthesizable RTL for module {{module_name}}.
+            Include MANDATORY JSON OUTPUT as defined in template.
+            EOF
+
+      - name: Parse AI JSON output
+        id: parse_json
+        run: |
+          echo "$AGENT_OUTPUT" | jq '.' > rtl_output.json
+          echo "::set-output name=agent_json::$(cat rtl_output.json)"
+          simulation_passed=$(jq '.simulation_passed' rtl_output.json)
+          if [ "$simulation_passed" != "true" ]; then
+            gh issue create --title "RTL Simulation Failed: {{module_name}}" \
+              --body "Agent-generated RTL failed simulation. JSON output:\n$(cat rtl_output.json)"
+            exit 1
+          fi
+
+      - name: Commit RTL files
+        run: |
+          git add rtl/*.v
+          git commit -m "Add AI-generated RTL for {{module_name}}"
+          git push
+
+  tb_generation:
+    name: Testbench Generation
+    needs: rtl_generation
+    runs-on: ubuntu-latest
+    outputs:
+      tb_json: ${{ steps.parse_json.outputs.agent_json }}
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Load context
+        run: |
+          cat ARCHITECTURE.md INTERFACE_SPEC.md TESTPLAN.md > tb_context.md
+
+      - name: Run AI Agent to generate Testbench
+        uses: github/agents@v1
+        with:
+          prompt: |
+            <<EOF
+            CONTEXT:
+            {{ tb_context.md }}
+
+            TASK:
+            Generate a Verilog testbench for module {{module_name}}.
+            Include MANDATORY JSON OUTPUT.
+            EOF
+
+      - name: Parse AI JSON output
+        id: parse_json
+        run: |
+          echo "$AGENT_OUTPUT" | jq '.' > tb_output.json
+          echo "::set-output name=agent_json::$(cat tb_output.json)"
+          simulation_passed=$(jq '.simulation_passed' tb_output.json)
+          if [ "$simulation_passed" != "true" ]; then
+            gh issue create --title "Testbench Simulation Failed: {{module_name}}" \
+              --body "Agent-generated testbench failed simulation. JSON output:\n$(cat tb_output.json)"
+            exit 1
+          fi
+
+      - name: Run simulation
+        run: |
+          iverilog -o sim.out rtl/*.v tb/*.v
+          vvp sim.out
+          if [ $? -ne 0 ]; then
+            gh issue create --title "Simulation Execution Failed: {{module_name}}" \
+              --body "Simulation failed during runtime. See agent output and logs."
+            exit 1
+
+  documentation_generation:
+    name: Documentation Generation
+    needs: tb_generation
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
+      - uses: actions/checkout@v3
 
-      - name: Assign AI agent and label issue
-        uses: actions/github-script@v6
+      - name: Load context
+        run: |
+          cat ARCHITECTURE.md INTERFACE_SPEC.md TESTPLAN.md NAMING_CONVENTIONS.md > doc_context.md
+
+      - name: Run AI Agent to generate Documentation
+        uses: github/agents@v1
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          script: |
-            // Determine issue number
-            const issueNumber = context.payload.issue?.number || context.payload.pull_request?.number;
-            if (!issueNumber) return;
+          prompt: |
+            <<EOF
+            CONTEXT:
+            {{ doc_context.md }}
 
-            // Extract issue_type from GitHub form inputs
-            const issueTypeRaw = context.payload.inputs?.issue_type?.toLowerCase() || "";
-            let assignee = "";
-            let labelToAdd = "";
+            TASK:
+            Generate detailed Markdown documentation for module {{module_name}}.
+            Include MANDATORY JSON OUTPUT.
+            EOF
 
-            switch(issueTypeRaw) {
-              case "rtl":
-                assignee = "CopilotRTL";
-                labelToAdd = "rtl";
-                break;
-              case "testbench":
-                assignee = "CopilotTB";
-                labelToAdd = "tb";
-                break;
-              case "documentation":
-                assignee = "CopilotDoc";
-                labelToAdd = "doc";
-                break;
-              case "verification":
-                assignee = "CopilotTB";
-                labelToAdd = "verification";
-                break;
-              case "setup":
-                assignee = "CopilotDoc";
-                labelToAdd = "setup";
-                break;
-              default:
-                assignee = "";
-            }
+      - name: Parse AI JSON output
+        id: parse_json
+        run: |
+          echo "$AGENT_OUTPUT" | jq '.' > doc_output.json
+          plan_completed=$(jq '.plan_item_completed' doc_output.json)
+          if [ "$plan_completed" != "true" ]; then
+            gh issue create --title "Documentation Incomplete: {{module_name}}" \
+              --body "Agent-generated documentation incomplete. JSON output:\n$(cat doc_output.json)"
+            exit 1
 
-            // Assign agent
-            if (assignee) {
-              await github.issues.addAssignees({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: issueNumber,
-                assignees: [assignee]
-              });
-            }
-
-            // Add corresponding issue type label
-            if (labelToAdd) {
-              await github.issues.addLabels({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: issueNumber,
-                labels: [labelToAdd]
-              });
-            }
-
-            // Add starting comment for the AI agent
-            if (assignee) {
-              await github.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: issueNumber,
-                body: `@${assignee} Assigned. Please follow the structured templates in '.github/agents/prompt-templates/' to generate outputs.`
-              });
-            }
-
-      - name: Auto-merge PR if ready
-        if: github.event_name == 'pull_request'
-        uses: actions/github-script@v6
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          script: |
-            const pr = context.payload.pull_request;
-            if (!pr) return;
-
-            // Skip draft PRs
-            if (pr.draft) return;
-
-            // Only merge if the PR has 'ready-to-merge' label
-            if (!pr.labels.some(l => l.name === 'ready-to-merge')) return;
-
-            // Merge PR
-            await github.pulls.merge({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              pull_number: pr.number,
-              merge_method: 'squash'
-            });
+      - name: Commit Documentation
+        run: |
+          git add docs/*.md
+          git commit -m "Add AI-generated documentation for {{module_name}}"
+          git push
