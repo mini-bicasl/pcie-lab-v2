@@ -2,6 +2,7 @@ name: AI Planning
 description: Generate or update the implementation plan (docs/PLAN.md) from ARCHITECTURE.md
 title: "[AI] Planning – "
 labels: ['AI-task']
+assignees: ['github-copilot']
 
 body:
   - type: dropdown

@@ -2,6 +2,7 @@ name: AI Specification
 description: Capture high-level idea and generate/update ARCHITECTURE.md
 title: "[AI] Specification – "
 labels: ['AI-task']
+assignees: ['github-copilot']
 
 body:
   - type: dropdown

@@ -16,6 +16,8 @@ This document explains the step-by-step workflow for developing RTL projects usi
 
 On GitHub: **New issue** → choose one of these four. Each form only shows the fields needed for that phase.
 
+**Labels and assignees:** Each template adds labels by issue type (see table below). The pipeline **routes by parsing the issue body** ("Select Issue Type"), not by labels. Labels (e.g. `AI-task`, `rtl`, `tb`, `doc`, `verification`) must exist in the repo—create them under **Issues → Labels** if needed. The default assignee is **github-copilot**; to change it, edit `assignees` in each template—see `.github/ISSUE_TEMPLATE/README.md`.
+
 ---
 
 ## **Step 1: Specification – Generate Architecture Document**
