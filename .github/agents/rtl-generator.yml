@@ -1,32 +1,36 @@
-name: RTL Generator
-runs-on: ubuntu-latest
+name: RTL generation
 
-steps:
-  - name: Checkout repository
-    uses: actions/checkout@v3
+on:
+  issue_label:
+    - "rtl requested"
 
-  - name: Generate RTL from ARCHITECTURE.md
-    uses: actions/github-script@v6
-    with:
-      github-token: ${{ secrets.GITHUB_TOKEN }}
-      script: |
-        const fs = require('fs');
-        const path = require('path');
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Load context
+        run: |
+          cat ARCHITECTURE.md INTERFACE_SPEC.md > full_context.md
+      - name: Run agent
+        uses: github/agents@v1
+        with:
+          prompt: |
+            <<EOF
+            CONTEXT:
+            {{ full_context.md }}
 
-        // Read ARCHITECTURE.md for module info
-        const arch = fs.readFileSync('docs/ARCHITECTURE.md', 'utf8');
-        const plan = fs.readFileSync('docs/PLAN.md', 'utf8');
-
-        // Load RTL prompt template
-        const template = fs.readFileSync('.github/agents/prompt-templates/rtl-template.md', 'utf8');
-        const prompt = template.replace('{{ARCHITECTURE_CONTENT}}', arch).replace('{{PLAN_CONTENT}}', plan);
-
-        // Call AI service (pseudo-code)
-        const ai_response = await generateRTL(prompt);
-
-        // Write RTL files
-        ai_response.files.forEach(f => {
-          const fullPath = path.join(process.cwd(), f.path);
-          fs.mkdirSync(path.dirname(fullPath), { recursive: true });
-          fs.writeFileSync(fullPath, f.content);
-        });
+            TASK:
+            Generate synthesizable Verilog RTL code for the requested component.
+            FOLLOW these criteria:
+              - Pass all interface spec constraints
+              - Include synchronous reset
+              - Provide comments explaining each state
+              - Pass all existing test vectors in TESTPLAN.md
+            VALIDATE:
+              - Module must compile with Icarus Verilog and Verilator.
+            EOF
+      - name: Validate RTL
+        run: |
+          iverilog -o out.vvp rtl/*.v tb/*.v
+          verilator --lint-only rtl/*.v
