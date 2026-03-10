@@ -1,27 +1,38 @@
-# AI RTL Generation Prompt
+# RTL Generation Template
 
-## Context
-You should use the content of the following files for context:
-- `docs/ARCHITECTURE.md` — design specifics, module descriptions
-- `docs/PLAN.md` — checklist of items to implement
+## CONTEXT
+Provide all relevant files:
+- Architecture: `ARCHITECTURE.md`
+- Interface spec: `INTERFACE_SPEC.md`
+- Naming conventions: `NAMING_CONVENTIONS.md`
+- Test vectors: `TESTPLAN.md`
 
-## Instructions for AI Agent
-Generate synthesizable RTL modules for the next unimplemented item in the PLAN.md checklist.
+## TASK
+Generate synthesizable Verilog RTL for the requested module: `{{module_name}}`.
 
-1. Read and understand `docs/ARCHITECTURE.md` (functional blocks, interfaces, diagrams).
-2. Locate the next unchecked RTL implementation item in `docs/PLAN.md`.
-3. Generate RTL code for the specified module.
-4. Place the resulting Verilog files in `rtl/`.
-5. Follow project naming and style conventions.
-6. Include inline comments where appropriate.
-7. Do not change other parts of `docs/ARCHITECTURE.md` unless adding missing definitions.
+### MODULE REQUIREMENTS
+- Follow all interface specs from INTERFACE_SPEC.md
+- Include synchronous reset and proper clock domains
+- Comment each FSM state and combinational logic
+- Follow naming conventions in NAMING_CONVENTIONS.md
+- Use structured module hierarchy consistent with ARCHITECTURE.md
 
-## Mandatory JSON Output
+### DELIVERABLES
+1. RTL file(s) (`*.v`) in `/rtl/`
+2. Optional Markdown comment header explaining the module
+
+### VALIDATION
+- Must compile cleanly with Icarus Verilog
+- Must pass all test vectors in TESTPLAN.md
+- Lint clean with Verilator
+
+### MANDATORY JSON OUTPUT
+After generating RTL, return exactly this JSON (replace placeholders appropriately):
 ```json
 {
-  "rtl_files": ["rtl/<module>.v", "..."],
-  "simulation_passed": <true/false>,
-  "coverage_percentage": <number>,
+  "rtl_files": ["rtl/{{module_name}}.v"],
+  "simulation_passed": true,
+  "coverage_percentage": 100,
   "plan_item_completed": true,
-  "version": "<issue_number>_<YYYYMMDD>"
+  "version": "{{issue_number}}_{{YYYYMMDD}}"
 }
