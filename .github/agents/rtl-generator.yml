@@ -11,11 +11,11 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
-      - name: Load project context
+      - name: Load context
         run: |
           cat ARCHITECTURE.md INTERFACE_SPEC.md NAMING_CONVENTIONS.md TESTPLAN.md > full_context.md
 
-      - name: Generate RTL with AI Agent
+      - name: Run AI agent to generate RTL
         uses: github/agents@v1
         with:
           prompt: |
@@ -24,26 +24,27 @@ jobs:
             {{ full_context.md }}
 
             TASK:
-            Generate synthesizable Verilog RTL code for the requested module.
-
-            CRITERIA:
-            - Must follow all interface specifications.
-            - Include synchronous reset and clock domains as specified.
-            - Comment each FSM state and combinational logic.
-            - Pass all test vectors defined in TESTPLAN.md.
-            - Follow naming conventions exactly from NAMING_CONVENTIONS.md.
-            - Use structured module hierarchy consistent with ARCHITECTURE.md.
-
-            DELIVERABLES:
-            - RTL file(s) (*.v)
-            - Optional brief explanation of module logic (Markdown comment header)
-
-            VALIDATION:
-            - Must compile with Icarus Verilog.
-            - Lint clean with Verilator.
+            Generate synthesizable RTL for module {{module_name}}.
+            Follow RTL template instructions, include MANDATORY JSON OUTPUT.
             EOF
 
-      - name: Validate RTL
+      - name: Parse AI JSON output
+        id: parse_json
         run: |
-          iverilog -o out.vvp rtl/*.v tb/*_tb.v
-          verilator --lint-only rtl/*.v
+          echo "$AGENT_OUTPUT" | jq '.' > agent_output.json
+          simulation_passed=$(jq '.simulation_passed' agent_output.json)
+          coverage=$(jq '.coverage_percentage' agent_output.json)
+          if [ "$simulation_passed" != "true" ]; then
+            echo "Simulation failed according to agent output."
+            gh issue create \
+              --title "RTL Simulation Failed: {{module_name}}" \
+              --body "Agent-generated RTL failed simulation. JSON output:\n$(cat agent_output.json)"
+            exit 1
+          fi
+          echo "JSON validated successfully. Coverage: $coverage%"
+
+      - name: Commit generated files
+        run: |
+          git add rtl/*.v
+          git commit -m "Add AI-generated RTL for {{module_name}}"
+          git push
