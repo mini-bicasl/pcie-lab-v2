@@ -1,0 +1,32 @@
+name: RTL Generator
+runs-on: ubuntu-latest
+steps:
+  - name: Checkout repo
+    uses: actions/checkout@v3
+
+  - name: Run RTL AI Agent
+    uses: actions/github-script@v6
+    with:
+      github-token: ${{ secrets.GITHUB_TOKEN }}
+      script: |
+        const issue = context.payload.issue;
+        if (!issue) return;
+        // Load prompt template
+        const fs = require('fs');
+        const template = fs.readFileSync('.github/agents/prompt-templates/rtl-template.md', 'utf8');
+        // Construct prompt
+        const prompt = template.replace('{{ISSUE_BODY}}', issue.body);
+        // Call AI service (pseudo-code)
+        const ai_response = await generateRTL(prompt);
+        // Save output files
+        ai_response.files.forEach(f => fs.writeFileSync(f.path, f.content));
+        // Create draft PR with files
+        await github.pulls.create({
+          owner: context.repo.owner,
+          repo: context.repo.repo,
+          head: `ai-rtl/${issue.number}`,
+          base: 'main',
+          title: `[AI] RTL Generation: ${issue.title}`,
+          body: `Generated RTL from issue #${issue.number}`,
+          draft: true
+        });
