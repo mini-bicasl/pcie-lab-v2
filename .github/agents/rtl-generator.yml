@@ -1,18 +1,21 @@
-name: RTL generation
+name: RTL Generation
 
 on:
   issue_label:
     - "rtl requested"
 
 jobs:
-  generate:
+  generate_rtl:
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v3
-      - name: Load context
+
+      - name: Load project context
         run: |
-          cat ARCHITECTURE.md INTERFACE_SPEC.md > full_context.md
-      - name: Run agent
+          cat ARCHITECTURE.md INTERFACE_SPEC.md NAMING_CONVENTIONS.md TESTPLAN.md > full_context.md
+
+      - name: Generate RTL with AI Agent
         uses: github/agents@v1
         with:
           prompt: |
@@ -21,16 +24,26 @@ jobs:
             {{ full_context.md }}
 
             TASK:
-            Generate synthesizable Verilog RTL code for the requested component.
-            FOLLOW these criteria:
-              - Pass all interface spec constraints
-              - Include synchronous reset
-              - Provide comments explaining each state
-              - Pass all existing test vectors in TESTPLAN.md
-            VALIDATE:
-              - Module must compile with Icarus Verilog and Verilator.
+            Generate synthesizable Verilog RTL code for the requested module.
+
+            CRITERIA:
+            - Must follow all interface specifications.
+            - Include synchronous reset and clock domains as specified.
+            - Comment each FSM state and combinational logic.
+            - Pass all test vectors defined in TESTPLAN.md.
+            - Follow naming conventions exactly from NAMING_CONVENTIONS.md.
+            - Use structured module hierarchy consistent with ARCHITECTURE.md.
+
+            DELIVERABLES:
+            - RTL file(s) (*.v)
+            - Optional brief explanation of module logic (Markdown comment header)
+
+            VALIDATION:
+            - Must compile with Icarus Verilog.
+            - Lint clean with Verilator.
             EOF
+
       - name: Validate RTL
         run: |
-          iverilog -o out.vvp rtl/*.v tb/*.v
+          iverilog -o out.vvp rtl/*.v tb/*_tb.v
           verilator --lint-only rtl/*.v
