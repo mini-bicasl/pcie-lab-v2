@@ -3,7 +3,6 @@ description: Create a structured AI task for RTL/Testbench/Documentation/Verific
 title: "[AI] "
 labels: ['AI-task']
 
-# Form body fields
 body:
   - type: dropdown
     id: issue_type
@@ -16,7 +15,7 @@ body:
         - Documentation
         - Verification
         - Setup
-      default: RTL
+      default: 0   # <-- must be index of the options array (0 = RTL)
     validations:
       required: true
 
@@ -26,7 +25,7 @@ body:
       label: "Issue Description"
       description: "Provide a detailed description of the module, task, or specification for the AI agent."
       placeholder: "Describe inputs, outputs, functionality, expected behavior, or reference specification."
-      value: ""
+      value: ""    # <-- cannot be empty
     validations:
       required: true
 
@@ -39,7 +38,9 @@ body:
         - High
         - Medium
         - Low
-      default: Medium
+      default: 1   # <-- index of "Medium"
+    validations:
+      required: true
 
   - type: textarea
     id: additional_notes
@@ -47,4 +48,4 @@ body:
       label: "Additional Notes (Optional)"
       description: "Any extra instructions, references, or constraints for the AI agent."
       placeholder: "Example: Follow company coding style, include FSM comments, or add specific test cases."
-      value: ""
+      value: ""    # <-- cannot be empty
