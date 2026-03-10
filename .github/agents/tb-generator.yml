@@ -1,0 +1,46 @@
+name: Testbench Generator
+runs-on: ubuntu-latest
+
+steps:
+  - name: Checkout repository
+    uses: actions/checkout@v3
+
+  - name: Run Testbench AI Agent
+    uses: actions/github-script@v6
+    with:
+      github-token: ${{ secrets.GITHUB_TOKEN }}
+      script: |
+        const issue = context.payload.issue;
+        if (!issue) return;
+
+        const fs = require('fs');
+        const path = require('path');
+
+        // Load testbench prompt template
+        const templatePath = '.github/agents/prompt-templates/tb-template.md';
+        const template = fs.readFileSync(templatePath, 'utf8');
+
+        // Construct AI prompt
+        const prompt = template.replace('{{ISSUE_BODY}}', issue.body);
+
+        // Call AI service (pseudo-code)
+        const ai_response = await generateTestbench(prompt); 
+        // Expected ai_response.files = [{path, content}, ...]
+        
+        // Save files to repo
+        ai_response.files.forEach(f => {
+          const fullPath = path.join(process.cwd(), f.path);
+          fs.mkdirSync(path.dirname(fullPath), { recursive: true });
+          fs.writeFileSync(fullPath, f.content);
+        });
+
+        // Create draft PR with testbench outputs
+        await github.pulls.create({
+          owner: context.repo.owner,
+          repo: context.repo.repo,
+          head: `ai-tb/${issue.number}`,
+          base: 'main',
+          title: `[AI] Testbench Generation: ${issue.title}`,
+          body: `Generated testbench from issue #${issue.number}`,
+          draft: true
+        });
