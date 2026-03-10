@@ -1,28 +1,39 @@
-name: Documentation Generator
-runs-on: ubuntu-latest
+name: Documentation Generation
 
-steps:
-  - name: Checkout repository
-    uses: actions/checkout@v3
+on:
+  issue_label:
+    - "doc requested"
 
-  - name: Generate Documentation from PLAN.md
-    uses: actions/github-script@v6
-    with:
-      github-token: ${{ secrets.GITHUB_TOKEN }}
-      script: |
-        const fs = require('fs');
-        const path = require('path');
+jobs:
+  generate_docs:
+    runs-on: ubuntu-latest
 
-        const arch = fs.readFileSync('docs/ARCHITECTURE.md', 'utf8');
-        const plan = fs.readFileSync('docs/PLAN.md', 'utf8');
+    steps:
+      - uses: actions/checkout@v3
 
-        const template = fs.readFileSync('.github/agents/prompt-templates/doc-template.md', 'utf8');
-        const prompt = template.replace('{{ARCHITECTURE_CONTENT}}', arch).replace('{{PLAN_CONTENT}}', plan);
+      - name: Load context
+        run: |
+          cat ARCHITECTURE.md INTERFACE_SPEC.md TESTPLAN.md NAMING_CONVENTIONS.md > doc_context.md
 
-        const ai_response = await generateDocumentation(prompt);
+      - name: Generate Documentation
+        uses: github/agents@v1
+        with:
+          prompt: |
+            <<EOF
+            CONTEXT:
+            {{ doc_context.md }}
 
-        ai_response.files.forEach(f => {
-          const fullPath = path.join(process.cwd(), f.path);
-          fs.mkdirSync(path.dirname(fullPath), { recursive: true });
-          fs.writeFileSync(fullPath, f.content);
-        });
+            TASK:
+            Write detailed Markdown documentation for the requested module or system.
+
+            CRITERIA:
+            - Include architecture overview.
+            - Provide module interfaces, ports, and parameters.
+            - Include state machine diagrams in ASCII or Mermaid.
+            - Include timing diagrams if applicable.
+            - Link to relevant RTL files and testbenches.
+            - Provide rationale for design choices and constraints.
+
+            DELIVERABLES:
+            - Markdown file (*.md) in /docs/
+            EOF
