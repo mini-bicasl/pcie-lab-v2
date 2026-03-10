@@ -15,7 +15,7 @@ body:
         - Documentation
         - Verification
         - Setup
-      default: 0   # <-- must be index of the options array (0 = RTL)
+      default: 0   # index of "RTL"
     validations:
       required: true
 
@@ -25,7 +25,7 @@ body:
       label: "Issue Description"
       description: "Provide a detailed description of the module, task, or specification for the AI agent."
       placeholder: "Describe inputs, outputs, functionality, expected behavior, or reference specification."
-      value: ""    # <-- cannot be empty
+      value: "Enter the detailed description here."  # <-- non-empty default string
     validations:
       required: true
 
@@ -38,7 +38,7 @@ body:
         - High
         - Medium
         - Low
-      default: 1   # <-- index of "Medium"
+      default: 1   # index of "Medium"
     validations:
       required: true
 
@@ -48,4 +48,4 @@ body:
       label: "Additional Notes (Optional)"
       description: "Any extra instructions, references, or constraints for the AI agent."
       placeholder: "Example: Follow company coding style, include FSM comments, or add specific test cases."
-      value: ""    # <-- cannot be empty
+      value: "Add optional notes here."  # <-- non-empty default string
