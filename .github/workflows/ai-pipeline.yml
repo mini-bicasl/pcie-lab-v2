@@ -1,12 +1,8 @@
-# AI-Driven Verilog Lab Pipeline
-# Triggered when an issue is opened (with form) or labeled "rtl requested", "tb requested", or "doc requested".
-# See docs/INSTRUCTION.md for the full workflow.
-
 name: AI-Driven Verilog Lab Pipeline
 
 on:
   issues:
-    types: [opened, labeled]
+    types: [opened]
   pull_request:
     types: [labeled]
 
@@ -36,43 +32,26 @@ jobs:
           BODY=$(echo '${{ github.event.issue.body }}' | sed 's/\\r//g')
           MODULE=$(echo "$BODY" | grep -i "module name" | head -1 | sed -n 's/.*:\s*\([A-Za-z0-9_]*\).*/\1/p' | xargs)
 
-          if [ "${{ github.event.action }}" = "opened" ]; then
-            if echo "$BODY" | grep -q '\*\*Select Issue Type\*\*:\s*RTL'; then
-              echo "run_rtl=true" >> $GITHUB_OUTPUT
-              echo "run_tb=false" >> $GITHUB_OUTPUT
-              echo "run_doc=false" >> $GITHUB_OUTPUT
-            elif echo "$BODY" | grep -q '\*\*Select Issue Type\*\*:\s*Testbench'; then
-              echo "run_rtl=false" >> $GITHUB_OUTPUT
-              echo "run_tb=true" >> $GITHUB_OUTPUT
-              echo "run_doc=false" >> $GITHUB_OUTPUT
-            elif echo "$BODY" | grep -q '\*\*Select Issue Type\*\*:\s*Documentation'; then
-              echo "run_rtl=false" >> $GITHUB_OUTPUT
-              echo "run_tb=false" >> $GITHUB_OUTPUT
-              echo "run_doc=true" >> $GITHUB_OUTPUT
-            else
-              echo "run_rtl=false" >> $GITHUB_OUTPUT
-              echo "run_tb=false" >> $GITHUB_OUTPUT
-              echo "run_doc=false" >> $GITHUB_OUTPUT
-            fi
+          # Decide which phase this issue represents.
+          # Implementation => run full generation (RTL + TB + Docs)
+          # Specification / Planning / Verification => no automatic generation.
+          if echo "$BODY" | grep -q '\*\*Select Issue Type\*\*:\s*Implementation'; then
+            echo "run_rtl=true" >> $GITHUB_OUTPUT
+            echo "run_tb=true" >> $GITHUB_OUTPUT
+            echo "run_doc=true" >> $GITHUB_OUTPUT
           else
-            echo "run_rtl=${{ github.event.label.name == 'rtl requested' }}" >> $GITHUB_OUTPUT
-            echo "run_tb=${{ github.event.label.name == 'tb requested' }}" >> $GITHUB_OUTPUT
-            echo "run_doc=${{ github.event.label.name == 'doc requested' }}" >> $GITHUB_OUTPUT
+            echo "run_rtl=false" >> $GITHUB_OUTPUT
+            echo "run_tb=false" >> $GITHUB_OUTPUT
+            echo "run_doc=false" >> $GITHUB_OUTPUT
           fi
 
           echo "module_name=${MODULE:-}" >> $GITHUB_OUTPUT
 
-          if [ -z "$MODULE" ] || [ "$MODULE" = "N/A" ]; then
-            if [ "${{ github.event.action }}" = "opened" ]; then
-              if echo "$BODY" | grep -qE '\*\*Select Issue Type\*\*:\s*(RTL|Testbench|Documentation)'; then
-                echo "::error::Module name is required for RTL/Testbench/Documentation. Set 'Module name' in the form."
-                exit 1
-              fi
-            else
-              if [ "${{ github.event.label.name }}" = "rtl requested" ] || [ "${{ github.event.label.name }}" = "tb requested" ] || [ "${{ github.event.label.name }}" = "doc requested" ]; then
-                echo "::error::Module name is required. Add 'Module name: <name>' to the issue body or use the form."
-                exit 1
-              fi
+          # For Implementation, module_name is required.
+          if echo "$BODY" | grep -q '\*\*Select Issue Type\*\*:\s*Implementation'; then
+            if [ -z "$MODULE" ] || [ "$MODULE" = "N/A" ]; then
+              echo "::error::Module name is required for Implementation. Set 'Module name' in the form."
+              exit 1
             fi
           fi
 

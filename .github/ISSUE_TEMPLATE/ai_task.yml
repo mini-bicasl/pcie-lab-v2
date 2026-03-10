@@ -1,5 +1,5 @@
 name: AI-Assisted Task
-description: Create a structured AI task for RTL/Testbench/Documentation/Verification
+description: Create a structured AI task for specification, planning, or implementation
 title: "[AI] "
 labels: ['AI-task']
 
@@ -8,14 +8,13 @@ body:
     id: issue_type
     attributes:
       label: "Select Issue Type"
-      description: "Choose the type of AI task. Then add the matching label to trigger the pipeline: 'rtl requested', 'tb requested', or 'doc requested'."
+      description: "Choose the phase of the flow this issue represents."
       options:
-        - RTL
-        - Testbench
-        - Documentation
+        - Specification
+        - Planning
+        - Implementation
         - Verification
-        - Setup
-      default: 0   # index of "RTL"
+      default: 0   # index of "Specification"
     validations:
       required: true
 
@@ -23,8 +22,8 @@ body:
     id: module_name
     attributes:
       label: "Module name"
-      description: "Required for RTL, Testbench, and Documentation tasks. Must match ARCHITECTURE.md (e.g. my_fsm, uart_tx). Use 'N/A' for Setup or Verification."
-      placeholder: "e.g. my_module"
+      description: "Required only for Implementation issues that target a specific module (must match ARCHITECTURE.md, e.g. alu8, uart_tx). For Specification or Planning you can use 'N/A'."
+      placeholder: "e.g. alu8, uart_tx, ddr4_ctrl_top"
     validations:
       required: false
 
@@ -32,38 +31,20 @@ body:
     id: issue_description
     attributes:
       label: "Issue Description"
-      description: "Use the template from docs/INSTRUCTION.md (Task, Reference, Requirements, Deliverables, Notes) or paste your task description. The agent reads ARCHITECTURE.md and docs/PLAN.md."
-      placeholder: |
-        # Task: <Module Name>
-        ## Reference
-        - ARCHITECTURE.md section: ...
-        - Implementation Plan task: ...
-        ## Requirements
-        - RTL module name: <module_name>
-        - Inputs / Outputs: ...
-        ## Deliverables
-        1. RTL in rtl/<module_name>.v 2. TB in tb/<module_name>_tb.v 3. Docs in docs/<module_name>.md 4. JSON summary
-      value: ""
+      description: "Describe in plain language what you want. For example: 'Implement a commercial server‑grade DDR4 controller with ECC, refresh logic, and configurable timing parameters.' The workflow will read ARCHITECTURE.md and docs/PLAN.md automatically."
+      placeholder: "Describe the RTL module / testbench / documentation, verification task, or high‑level idea you want the AI to work on."
     validations:
       required: false
 
-  - type: dropdown
-    id: priority
+  - type: checkboxes
+    id: verification_focus
     attributes:
-      label: "Priority"
-      description: "Set the priority of this AI task."
+      label: "Verification focus (optional)"
+      description: "Only relevant when Issue Type is 'Verification'. Select what you want to improve, based on INSTRUCTION.md Step 4 (e.g. lines 127‑129)."
       options:
-        - High
-        - Medium
-        - Low
-      default: 1   # index of "Medium"
-    validations:
-      required: true
-
-  - type: textarea
-    id: additional_notes
-    attributes:
-      label: "Additional Notes (Optional)"
-      description: "Extra instructions for the AI agent."
-      placeholder: "Example: follow coding style, include FSM comments, specific test cases."
-      value: "No additional notes."
+        - label: "Add more tests (new scenarios, corner cases, stress tests)"
+          required: false
+        - label: "Tighten constraints (protocol/timing/assertions/coverage goals)"
+          required: false
+        - label: "Refine RTL or documentation based on failing tests or coverage gaps"
+          required: false

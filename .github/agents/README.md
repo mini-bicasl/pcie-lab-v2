@@ -1,33 +1,63 @@
 # AI Agents for Verilog Lab
 
-This folder defines **agent configs** and **prompt templates** used by the AI-driven RTL workflow. The actual automation runs in **`.github/workflows/`**.
+This folder defines **agent configs** and **prompt templates** used by the AI-driven RTL workflow. The actual automation runs in **`.github/workflows/`**, primarily **`ai-pipeline.yml`**.
 
-## Workflow
+At a high level, the user thinks in terms of **Specification → Planning → Implementation → Verification**.  
+Internally, the **Implementation** phase fans out to three specialized agents:
 
-1. **Trigger:** Open an issue with the [AI Task Form](.github/ISSUE_TEMPLATE/ai_task.yml) (or add a label to an existing issue).
-2. **Labels:** For RTL / Testbench / Documentation tasks, use (or get auto-added) label **`rtl requested`**, **`tb requested`**, or **`doc requested`**.
-3. **Pipeline:** [ai-pipeline.yml](../workflows/ai-pipeline.yml) runs, parses the issue (module name, task type), builds context from `docs/ARCHITECTURE.md` and `docs/PLAN.md`, and runs the matching agent.
-4. **Outputs:** Generated RTL, testbench, or docs are committed to a branch and a PR is opened. JSON summaries go to **`results/`**.
-5. **Merge:** Add label **`ready-to-merge`** on the PR to auto-merge ([ready-to-merge.yml](../workflows/ready-to-merge.yml)).
+- RTL generation
+- Testbench generation
+- Documentation generation
 
-See **`docs/INSTRUCTION.md`** for the full step-by-step workflow.
+## How the end-to-end workflow uses these agents
+
+1. **User opens an AI issue** with the [AI Task Form](../ISSUE_TEMPLATE/ai_task.yml):
+   - Chooses Issue Type: `Specification`, `Planning`, `Implementation`, or `Verification`.
+   - Optionally sets `Module name` (required for `Implementation`).
+2. **Workflow:** [ai-pipeline.yml](../workflows/ai-pipeline.yml) runs:
+   - Parses the issue body to determine the phase and module name.
+   - Builds a **context file** from:
+     - `docs/ARCHITECTURE.md` (or root `ARCHITECTURE.md`)
+     - `docs/PLAN.md` (if present)
+     - Optional spec files: `INTERFACE_SPEC.md`, `NAMING_CONVENTIONS.md`, `TESTPLAN.md` (root or `docs/`).
+3. **Phase routing:**
+   - `Specification` and `Planning`:
+     - Used for high-level architecture and plan work.
+     - No automatic RTL/TB/Documentation generation is triggered by the pipeline.
+   - `Implementation`:
+     - Triggers **all three agents**: RTL, Testbench, and Documentation, for the given module.
+   - `Verification`:
+     - Reserved for coverage / test improvements. It does not auto-run these agents by default.
+4. **Agents run:**
+   - Each agent uses a prompt template from `prompt-templates/` plus the context file.
+   - They generate files under `rtl/`, `tb/`, `docs/`, and JSON summaries under `results/`.
+5. **Outputs and PRs:**
+   - The workflow commits generated files on `ai/...` branches and opens PRs.
+   - When the user adds the label **`ready-to-merge`** to a PR, the same workflow auto-merges it.
+
+See **`docs/INSTRUCTION.md`** for the full user-facing flow.
 
 ## Contents
 
 | File | Purpose |
 |------|--------|
-| **rtl-generator.yml** | Agent spec for RTL generation (trigger, context, deliverables, JSON schema). |
+| **rtl-generator.yml** | Agent spec for RTL generation (context, deliverables, JSON schema). |
 | **tb-generator.yml** | Agent spec for testbench generation. |
 | **doc-generator.yml** | Agent spec for documentation generation. |
-| **prompt-templates/rtl-template.md** | Prompt template for RTL agent. |
-| **prompt-templates/tb-template.md** | Prompt template for testbench agent. |
-| **prompt-templates/doc-template.md** | Prompt template for documentation agent. |
-| **prompt-templates/PLAN.md** | Reference for Implementation Plan structure (actual plan: `docs/PLAN.md`). |
-| **prompt-templates/ARCHITECTURE.md** | Reference for architecture structure (actual doc: `docs/ARCHITECTURE.md`). |
+| **prompt-templates/rtl-template.md** | Prompt template for the RTL agent (expects JSON with `rtl_files`, `simulation_passed`, `coverage_percentage`, `plan_item_completed`, `version`). |
+| **prompt-templates/tb-template.md** | Prompt template for the testbench agent (expects JSON with `tb_files`, `simulation_passed`, `coverage_percentage`, `plan_item_completed`, `version`). |
+| **prompt-templates/doc-template.md** | Prompt template for the documentation agent (expects JSON with `doc_files`, `plan_item_completed`, `version`). |
+| **prompt-templates/PLAN.md** | Reference for Implementation Plan structure (actual plan lives in `docs/PLAN.md`). |
+| **prompt-templates/ARCHITECTURE.md** | Reference for architecture structure (actual doc lives in `docs/ARCHITECTURE.md`). |
 
 ## Context files
 
-- **Required:** `docs/ARCHITECTURE.md` (or root `ARCHITECTURE.md`) — single source of truth for interfaces and blocks.
-- **Optional:** `docs/PLAN.md`, and if present: `INTERFACE_SPEC.md`, `NAMING_CONVENTIONS.md`, `TESTPLAN.md` (under repo root or `docs/`).
+- **Required:** `docs/ARCHITECTURE.md` (or root `ARCHITECTURE.md`) — single source of truth for modules, interfaces, and high-level behavior.
+- **Optional:** `docs/PLAN.md` and, if present:
+  - `INTERFACE_SPEC.md`
+  - `NAMING_CONVENTIONS.md`
+  - `TESTPLAN.md`
+  (either in the repo root or under `docs/`).
 
-The workflow builds one context file per run and passes it to the agent; templates describe the expected JSON output for traceability in **`results/`**.
+The workflow builds a single context file per run and passes it to the agents.  
+Each prompt template describes the expected JSON output shape for traceability in **`results/`**.
