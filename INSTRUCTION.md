@@ -29,24 +29,39 @@ This document explains the step-by-step workflow for developing RTL projects usi
 
 ---
 
-## **Step 3: Execute Implementation Tasks**
+## **Step 3: Executing Implementation Tasks – Markdown Template for Users**
 
-1. For each module/task in the Implementation Plan:
-   - Create a new AI task issue using the AI Task Form.
-   - Select appropriate **issue type**:
-     - `RTL` → CopilotRTL generates the module.
-     - `Testbench` → CopilotTB generates testbench.
-     - `Documentation` → CopilotDoc generates Markdown docs.
-     - `Verification` → CopilotTB adds simulation/coverage tasks.
-   - Fill in the **Issue Description** with references from ARCHITECTURE.md and Implementation Plan.
-2. Each AI agent:
-   - Generates output files in the repository (`rtl/`, `tb/`, `docs/`).
-   - Produces a **JSON summary** indicating simulation results, coverage, and generated files.
-3. Draft PRs are created automatically by the AI pipeline.
-4. Review outputs:
-   - Check RTL correctness and coding style.
-   - Run simulations and verify coverage.
-   - Review documentation completeness.
+1. For each module/task, create a new issue using this Markdown template in the AI Task Form (ai_task.yml). Copy-paste this into the Issue Description field:
+```
+# Task: <Module Name or Feature>
+
+## Reference
+- See ARCHITECTURE.md section: <section name or block diagram reference>
+- Implementation Plan task: <task ID or description>
+
+## Requirements
+- RTL module name: <module_name>
+- Inputs / Outputs: <list of signals>
+- Functionality description: <brief behavior>
+- Constraints: <timing, protocols, coding style, FSM rules>
+
+## Deliverables
+1. RTL file in `rtl/<module_name>.v` (CopilotRTL)
+2. Testbench file in `tb/<module_name>_tb.v` (CopilotTB)
+3. Documentation in `docs/<module_name>.md` (CopilotDoc)
+4. JSON summary of files, simulation pass/fail, coverage
+
+## Notes / Additional Instructions
+- Include inline comments in RTL for FSM states or key logic
+- Include test cases and expected outputs in testbench
+- Use Markdown documentation template for docs
+```
+
+2. How to use this template:
+- Copy this into the Issue Description field of the AI Task Form.
+- Select issue type in the dropdown (RTL, Testbench, Documentation, Verification).
+- Assign priority if needed.
+- The AI pipeline workflow will assign the correct agent, generate draft PRs, and populate rtl/, tb/, and docs/.
 
 ---
 
@@ -78,3 +93,23 @@ After executing tasks, your repository should include:
 - /results/ # Simulation logs and coverage
 - .github/agents/prompt-templates/ # AI templates
 - ARCHITECTURE.md
+
+---
+
+## **Best Practices**
+
+- Always **start with ARCHITECTURE.md**; it is the single source of truth.
+- Use **structured AI prompts** from `.github/agents/prompt-templates/`.
+- Check **JSON outputs** to ensure the AI agent met all requirements.
+- Review PRs manually if unsure; do not merge unverified outputs.
+- Use hierarchical issues (Epic → Feature → Micro/Verification) for complex designs.
+
+---
+
+## **Summary Workflow**
+
+1. Generate **ARCHITECTURE.md**  
+2. Create **Implementation Plan**  
+3. Execute module/testbench/documentation tasks via AI issues  
+4. Verify outputs → label **ready-to-merge** → auto-merge  
+5. Iteratively refine until project is complete
