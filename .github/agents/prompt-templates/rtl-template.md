@@ -1,31 +1,27 @@
 # AI RTL Generation Prompt
 
-## Issue Description
-{{ISSUE_BODY}}
+## Context
+You should use the content of the following files for context:
+- `docs/ARCHITECTURE.md` — design specifics, module descriptions
+- `docs/PLAN.md` — checklist of items to implement
 
 ## Instructions for AI Agent
+Generate synthesizable RTL modules for the next unimplemented item in the PLAN.md checklist.
 
-You are generating synthesizable RTL modules for a digital hardware project. Follow these rules:
-
-1. **Naming & Style**  
-   - Use clear module names reflecting functionality.  
-   - 2-space indentation.  
-   - Include module header comments describing purpose, inputs, outputs, and FSM states if applicable.  
-2. **Specification Reference**  
-   - Always reference the specification or design document provided in the issue.  
-3. **Deliverables**  
-   - RTL Verilog files for each module in `rtl/`.  
-   - Ensure modules are **syntactically correct**.  
-   - Include a minimal simulation block to verify syntax.  
-4. **Documentation**  
-   - Include inline comments for FSMs, states, and key logic.  
+1. Read and understand `docs/ARCHITECTURE.md` (functional blocks, interfaces, diagrams).
+2. Locate the next unchecked RTL implementation item in `docs/PLAN.md`.
+3. Generate RTL code for the specified module.
+4. Place the resulting Verilog files in `rtl/`.
+5. Follow project naming and style conventions.
+6. Include inline comments where appropriate.
+7. Do not change other parts of `docs/ARCHITECTURE.md` unless adding missing definitions.
 
 ## Mandatory JSON Output
 ```json
 {
   "rtl_files": ["rtl/<module>.v", "..."],
-  "simulation_passed": true,
-  "coverage_percentage": 85,
-  "module_summary": "Short description of module purpose and main states",
+  "simulation_passed": <true/false>,
+  "coverage_percentage": <number>,
+  "plan_item_completed": true,
   "version": "<issue_number>_<YYYYMMDD>"
 }
