@@ -8,7 +8,7 @@ body:
     id: issue_type
     attributes:
       label: "Select Issue Type"
-      description: "Choose the type of AI task for this issue."
+      description: "Choose the type of AI task. Then add the matching label to trigger the pipeline: 'rtl requested', 'tb requested', or 'doc requested'."
       options:
         - RTL
         - Testbench
@@ -19,13 +19,31 @@ body:
     validations:
       required: true
 
+  - type: input
+    id: module_name
+    attributes:
+      label: "Module name"
+      description: "Required for RTL, Testbench, and Documentation tasks. Must match ARCHITECTURE.md (e.g. my_fsm, uart_tx). Use 'N/A' for Setup or Verification."
+      placeholder: "e.g. my_module"
+    validations:
+      required: false
+
   - type: textarea
     id: issue_description
     attributes:
       label: "Issue Description"
-      description: "Optional description for the AI agent. The agent will read ARCHITECTURE.md and PLAN.md automatically."
-      placeholder: "Brief instructions for AI (optional)"
-      value: "AI agent will parse ARCHITECTURE.md and PLAN.md to determine the task."
+      description: "Use the template from docs/INSTRUCTION.md (Task, Reference, Requirements, Deliverables, Notes) or paste your task description. The agent reads ARCHITECTURE.md and docs/PLAN.md."
+      placeholder: |
+        # Task: <Module Name>
+        ## Reference
+        - ARCHITECTURE.md section: ...
+        - Implementation Plan task: ...
+        ## Requirements
+        - RTL module name: <module_name>
+        - Inputs / Outputs: ...
+        ## Deliverables
+        1. RTL in rtl/<module_name>.v 2. TB in tb/<module_name>_tb.v 3. Docs in docs/<module_name>.md 4. JSON summary
+      value: ""
     validations:
       required: false
 

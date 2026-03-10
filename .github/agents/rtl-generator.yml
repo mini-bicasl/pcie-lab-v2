@@ -1,50 +1,45 @@
+# RTL Generator Agent
+# Used by .github/workflows/ai-pipeline.yml when label "rtl requested" is added to an issue.
+# Prompt template: .github/agents/prompt-templates/rtl-template.md
+
 name: RTL Generation
 
-on:
-  issue_label:
-    - "rtl requested"
+trigger:
+  on: issues
+  types: [labeled]
+  label: "rtl requested"
 
-jobs:
-  generate_rtl:
-    runs-on: ubuntu-latest
+context:
+  required:
+    - docs/ARCHITECTURE.md
+    - docs/ARCHITECTURE.md
+  optional:
+    - docs/PLAN.md
+    - docs/INTERFACE_SPEC.md
+    - docs/NAMING_CONVENTIONS.md
+    - docs/TESTPLAN.md
+    - docs/INTERFACE_SPEC.md
+    - docs/TESTPLAN.md
+  # Workflow builds full_context.md from required (first found) + optional if present
 
-    steps:
-      - uses: actions/checkout@v3
+inputs:
+  module_name: "Parsed from issue body: 'Module name: <name>' or 'RTL module name: <name>'"
 
-      - name: Load context
-        run: |
-          cat ARCHITECTURE.md INTERFACE_SPEC.md NAMING_CONVENTIONS.md TESTPLAN.md > full_context.md
+deliverables:
+  - path: "rtl/{{ module_name }}.v"
+    description: "Synthesizable Verilog RTL"
+  - path: "results/rtl_output.json"
+    description: "JSON summary (files, simulation_passed, coverage_percentage)"
 
-      - name: Run AI agent to generate RTL
-        uses: github/agents@v1
-        with:
-          prompt: |
-            <<EOF
-            CONTEXT:
-            {{ full_context.md }}
+prompt_template: ".github/agents/prompt-templates/rtl-template.md"
 
-            TASK:
-            Generate synthesizable RTL for module {{module_name}}.
-            Follow RTL template instructions, include MANDATORY JSON OUTPUT.
-            EOF
+validation:
+  - "RTL compiles with Icarus Verilog"
+  - "JSON output includes simulation_passed, coverage_percentage, plan_item_completed"
 
-      - name: Parse AI JSON output
-        id: parse_json
-        run: |
-          echo "$AGENT_OUTPUT" | jq '.' > agent_output.json
-          simulation_passed=$(jq '.simulation_passed' agent_output.json)
-          coverage=$(jq '.coverage_percentage' agent_output.json)
-          if [ "$simulation_passed" != "true" ]; then
-            echo "Simulation failed according to agent output."
-            gh issue create \
-              --title "RTL Simulation Failed: {{module_name}}" \
-              --body "Agent-generated RTL failed simulation. JSON output:\n$(cat agent_output.json)"
-            exit 1
-          fi
-          echo "JSON validated successfully. Coverage: $coverage%"
-
-      - name: Commit generated files
-        run: |
-          git add rtl/*.v
-          git commit -m "Add AI-generated RTL for {{module_name}}"
-          git push
+output_json_schema:
+  rtl_files: ["rtl/{{ module_name }}.v"]
+  simulation_passed: true
+  coverage_percentage: number
+  plan_item_completed: true
+  version: "issue_number_YYYYMMDD"

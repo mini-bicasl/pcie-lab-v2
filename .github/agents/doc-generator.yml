@@ -1,48 +1,40 @@
+# Documentation Generator Agent
+# Used by .github/workflows/ai-pipeline.yml when label "doc requested" is added to an issue.
+# Prompt template: .github/agents/prompt-templates/doc-template.md
+
 name: Documentation Generation
 
-on:
-  issue_label:
-    - "doc requested"
+trigger:
+  on: issues
+  types: [labeled]
+  label: "doc requested"
 
-jobs:
-  generate_docs:
-    runs-on: ubuntu-latest
+context:
+  required:
+    - docs/ARCHITECTURE.md
+    - docs/ARCHITECTURE.md
+  optional:
+    - docs/PLAN.md
+    - docs/INTERFACE_SPEC.md
+    - docs/NAMING_CONVENTIONS.md
+    - docs/INTERFACE_SPEC.md
 
-    steps:
-      - uses: actions/checkout@v3
+inputs:
+  module_name: "Parsed from issue body: 'Module name: <name>'"
 
-      - name: Load context
-        run: |
-          cat ARCHITECTURE.md INTERFACE_SPEC.md TESTPLAN.md NAMING_CONVENTIONS.md > doc_context.md
+deliverables:
+  - path: "docs/{{ module_name }}.md"
+    description: "Markdown documentation"
+  - path: "results/doc_output.json"
+    description: "JSON summary"
 
-      - name: Run AI agent to generate documentation
-        uses: github/agents@v1
-        with:
-          prompt: |
-            <<EOF
-            CONTEXT:
-            {{ doc_context.md }}
+prompt_template: ".github/agents/prompt-templates/doc-template.md"
 
-            TASK:
-            Generate documentation for module {{module_name}}.
-            Follow doc template instructions, include MANDATORY JSON OUTPUT.
-            EOF
+validation:
+  - "Documentation covers interfaces, behavior, and references ARCHITECTURE"
+  - "JSON output includes plan_item_completed"
 
-      - name: Parse AI JSON output
-        id: parse_json
-        run: |
-          echo "$AGENT_OUTPUT" | jq '.' > agent_doc_output.json
-          plan_completed=$(jq '.plan_item_completed' agent_doc_output.json)
-          if [ "$plan_completed" != "true" ]; then
-            echo "Documentation plan item not completed."
-            gh issue create \
-              --title "Documentation Incomplete: {{module_name}}" \
-              --body "Agent-generated documentation incomplete. JSON output:\n$(cat agent_doc_output.json)"
-            exit 1
-          fi
-
-      - name: Commit documentation
-        run: |
-          git add docs/*.md
-          git commit -m "Add AI-generated documentation for {{module_name}}"
-          git push
+output_json_schema:
+  doc_files: ["docs/{{ module_name }}.md"]
+  plan_item_completed: true
+  version: "issue_number_YYYYMMDD"

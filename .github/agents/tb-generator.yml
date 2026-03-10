@@ -1,53 +1,46 @@
+# Testbench Generator Agent
+# Used by .github/workflows/ai-pipeline.yml when label "tb requested" is added to an issue.
+# Prompt template: .github/agents/prompt-templates/tb-template.md
+
 name: Testbench Generation
 
-on:
-  issue_label:
-    - "tb requested"
+trigger:
+  on: issues
+  types: [labeled]
+  label: "tb requested"
 
-jobs:
-  generate_tb:
-    runs-on: ubuntu-latest
+context:
+  required:
+    - docs/ARCHITECTURE.md
+    - docs/ARCHITECTURE.md
+  optional:
+    - docs/PLAN.md
+    - docs/INTERFACE_SPEC.md
+    - docs/TESTPLAN.md
+    - docs/INTERFACE_SPEC.md
+    - docs/TESTPLAN.md
 
-    steps:
-      - uses: actions/checkout@v3
+inputs:
+  module_name: "Parsed from issue body: 'Module name: <name>'"
 
-      - name: Load context
-        run: |
-          cat ARCHITECTURE.md INTERFACE_SPEC.md TESTPLAN.md > tb_context.md
+deliverables:
+  - path: "tb/{{ module_name }}_tb.v"
+    description: "Verilog testbench"
+  - path: "results/tb_output.json"
+    description: "JSON summary"
+  - path: "results/sim.log"
+    description: "Simulation log (from iverilog/vvp)"
 
-      - name: Run AI agent to generate testbench
-        uses: github/agents@v1
-        with:
-          prompt: |
-            <<EOF
-            CONTEXT:
-            {{ tb_context.md }}
+prompt_template: ".github/agents/prompt-templates/tb-template.md"
 
-            TASK:
-            Generate testbench for module {{module_name}}.
-            Follow TB template instructions, include MANDATORY JSON OUTPUT.
-            EOF
+validation:
+  - "Testbench compiles with Icarus Verilog"
+  - "Simulation runs (iverilog + vvp)"
+  - "JSON output includes simulation_passed"
 
-      - name: Parse AI JSON output
-        id: parse_json
-        run: |
-          echo "$AGENT_OUTPUT" | jq '.' > agent_tb_output.json
-          simulation_passed=$(jq '.simulation_passed' agent_tb_output.json)
-          if [ "$simulation_passed" != "true" ]; then
-            echo "Simulation failed according to agent JSON."
-            gh issue create \
-              --title "Testbench Simulation Failed: {{module_name}}" \
-              --body "Agent-generated testbench failed simulation. JSON output:\n$(cat agent_tb_output.json)"
-            exit 1
-          fi
-
-      - name: Run simulation
-        run: |
-          iverilog -o sim.out rtl/*.v tb/*.v
-          vvp sim.out
-          if [ $? -ne 0 ]; then
-            echo "Simulation execution failed. Opening issue."
-            gh issue create \
-              --title "Simulation Execution Failed: {{module_name}}" \
-              --body "Simulation failed during runtime. See agent output and logs."
-            exit 1
+output_json_schema:
+  tb_files: ["tb/{{ module_name }}_tb.v"]
+  simulation_passed: true
+  coverage_percentage: number
+  plan_item_completed: true
+  version: "issue_number_YYYYMMDD"

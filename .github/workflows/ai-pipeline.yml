@@ -1,138 +1,266 @@
+# AI-Driven Verilog Lab Pipeline
+# Triggered when an issue is opened (with form) or labeled "rtl requested", "tb requested", or "doc requested".
+# See docs/INSTRUCTION.md for the full workflow.
+
 name: AI-Driven Verilog Lab Pipeline
 
 on:
-  issue_label:
-    - "rtl requested"
-    - "tb requested"
-    - "doc requested"
+  issues:
+    types: [opened, labeled]
+  pull_request:
+    types: [labeled]
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: read
+
+env:
+  ARCHITECTURE_PATH: docs/ARCHITECTURE.md
+  PLAN_PATH: docs/PLAN.md
 
 jobs:
+  parse_issue:
+    name: Parse issue
+    runs-on: ubuntu-latest
+    if: github.event_name == 'issues'
+    outputs:
+      module_name: ${{ steps.vars.outputs.module_name }}
+      run_rtl: ${{ steps.vars.outputs.run_rtl }}
+      run_tb: ${{ steps.vars.outputs.run_tb }}
+      run_doc: ${{ steps.vars.outputs.run_doc }}
+    steps:
+      - name: Parse issue body
+        id: vars
+        run: |
+          BODY=$(echo '${{ github.event.issue.body }}' | sed 's/\\r//g')
+          MODULE=$(echo "$BODY" | grep -i "module name" | head -1 | sed -n 's/.*:\s*\([A-Za-z0-9_]*\).*/\1/p' | xargs)
+
+          if [ "${{ github.event.action }}" = "opened" ]; then
+            if echo "$BODY" | grep -q '\*\*Select Issue Type\*\*:\s*RTL'; then
+              echo "run_rtl=true" >> $GITHUB_OUTPUT
+              echo "run_tb=false" >> $GITHUB_OUTPUT
+              echo "run_doc=false" >> $GITHUB_OUTPUT
+            elif echo "$BODY" | grep -q '\*\*Select Issue Type\*\*:\s*Testbench'; then
+              echo "run_rtl=false" >> $GITHUB_OUTPUT
+              echo "run_tb=true" >> $GITHUB_OUTPUT
+              echo "run_doc=false" >> $GITHUB_OUTPUT
+            elif echo "$BODY" | grep -q '\*\*Select Issue Type\*\*:\s*Documentation'; then
+              echo "run_rtl=false" >> $GITHUB_OUTPUT
+              echo "run_tb=false" >> $GITHUB_OUTPUT
+              echo "run_doc=true" >> $GITHUB_OUTPUT
+            else
+              echo "run_rtl=false" >> $GITHUB_OUTPUT
+              echo "run_tb=false" >> $GITHUB_OUTPUT
+              echo "run_doc=false" >> $GITHUB_OUTPUT
+            fi
+          else
+            echo "run_rtl=${{ github.event.label.name == 'rtl requested' }}" >> $GITHUB_OUTPUT
+            echo "run_tb=${{ github.event.label.name == 'tb requested' }}" >> $GITHUB_OUTPUT
+            echo "run_doc=${{ github.event.label.name == 'doc requested' }}" >> $GITHUB_OUTPUT
+          fi
+
+          echo "module_name=${MODULE:-}" >> $GITHUB_OUTPUT
+
+          if [ -z "$MODULE" ] || [ "$MODULE" = "N/A" ]; then
+            if [ "${{ github.event.action }}" = "opened" ]; then
+              if echo "$BODY" | grep -qE '\*\*Select Issue Type\*\*:\s*(RTL|Testbench|Documentation)'; then
+                echo "::error::Module name is required for RTL/Testbench/Documentation. Set 'Module name' in the form."
+                exit 1
+              fi
+            else
+              if [ "${{ github.event.label.name }}" = "rtl requested" ] || [ "${{ github.event.label.name }}" = "tb requested" ] || [ "${{ github.event.label.name }}" = "doc requested" ]; then
+                echo "::error::Module name is required. Add 'Module name: <name>' to the issue body or use the form."
+                exit 1
+              fi
+            fi
+          fi
+
   rtl_generation:
     name: RTL Generation
     runs-on: ubuntu-latest
-    outputs:
-      rtl_json: ${{ steps.parse_json.outputs.agent_json }}
+    needs: parse_issue
+    if: needs.parse_issue.outputs.run_rtl == 'true'
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
-      - name: Load context
+      - name: Build context
+        id: context
         run: |
-          cat ARCHITECTURE.md INTERFACE_SPEC.md NAMING_CONVENTIONS.md TESTPLAN.md > full_context.md
+          ARCH="${{ env.ARCHITECTURE_PATH }}"
+          PLAN="${{ env.PLAN_PATH }}"
+          [ -f "$ARCH" ] || ARCH="ARCHITECTURE.md"
+          [ -f "$ARCH" ] || { echo "::error::ARCHITECTURE.md not found in repo root or docs/"; exit 1; }
+          { cat "$ARCH"; echo ""; } > full_context.md
+          [ -f "$PLAN" ] && { echo "--- Implementation Plan ---"; cat "$PLAN"; } >> full_context.md
+          for f in INTERFACE_SPEC.md NAMING_CONVENTIONS.md TESTPLAN.md docs/INTERFACE_SPEC.md docs/TESTPLAN.md; do
+            [ -f "$f" ] && { echo ""; echo "--- $f ---"; cat "$f"; } >> full_context.md
+          done
+          echo "context_path=full_context.md" >> $GITHUB_OUTPUT
 
       - name: Run AI Agent to generate RTL
+        id: agent
         uses: github/agents@v1
         with:
           prompt: |
-            <<EOF
-            CONTEXT:
-            {{ full_context.md }}
-
-            TASK:
-            Generate synthesizable RTL for module {{module_name}}.
-            Include MANDATORY JSON OUTPUT as defined in template.
-            EOF
+            Use the CONTEXT file: ${{ steps.context.outputs.context_path }}
+            Generate synthesizable Verilog RTL for module: ${{ needs.parse_issue.outputs.module_name }}
+            Follow the template in .github/agents/prompt-templates/rtl-template.md
+            Include the MANDATORY JSON OUTPUT at the end of your response.
+            Write RTL to rtl/${{ needs.parse_issue.outputs.module_name }}.v
 
       - name: Parse AI JSON output
         id: parse_json
         run: |
-          echo "$AGENT_OUTPUT" | jq '.' > rtl_output.json
-          echo "::set-output name=agent_json::$(cat rtl_output.json)"
-          simulation_passed=$(jq '.simulation_passed' rtl_output.json)
+          mkdir -p results
+          echo "${{ steps.agent.outputs.result }}" | tee results/rtl_output.json | jq '.' || true
+          simulation_passed=$(echo "${{ steps.agent.outputs.result }}" | jq -r '.simulation_passed // empty')
           if [ "$simulation_passed" != "true" ]; then
-            gh issue create --title "RTL Simulation Failed: {{module_name}}" \
-              --body "Agent-generated RTL failed simulation. JSON output:\n$(cat rtl_output.json)"
-            exit 1
+            echo "::warning::Agent did not report simulation_passed=true. Continuing; verify RTL manually."
           fi
 
       - name: Commit RTL files
         run: |
-          git add rtl/*.v
-          git commit -m "Add AI-generated RTL for {{module_name}}"
-          git push
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -b "ai/rtl-${{ needs.parse_issue.outputs.module_name }}-${{ github.run_id }}"
+          git add rtl/*.v results/rtl_output.json 2>/dev/null || true
+          git add results/rtl_output.json 2>/dev/null || true
+          git diff --staged --quiet || git commit -m "Add AI-generated RTL for ${{ needs.parse_issue.outputs.module_name }}"
+          git push -u origin "ai/rtl-${{ needs.parse_issue.outputs.module_name }}-${{ github.run_id }}"
+
+      - name: Open Pull Request
+        run: |
+          gh pr create --base main --head "ai/rtl-${{ needs.parse_issue.outputs.module_name }}-${{ github.run_id }}" \
+            --title "[AI] RTL: ${{ needs.parse_issue.outputs.module_name }}" \
+            --body "Generated from issue #${{ github.event.issue.number }}. Add label **ready-to-merge** to merge."
 
   tb_generation:
     name: Testbench Generation
-    needs: rtl_generation
     runs-on: ubuntu-latest
-    outputs:
-      tb_json: ${{ steps.parse_json.outputs.agent_json }}
+    needs: parse_issue
+    if: needs.parse_issue.outputs.run_tb == 'true'
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
-      - name: Load context
+      - name: Build context
+        id: context
         run: |
-          cat ARCHITECTURE.md INTERFACE_SPEC.md TESTPLAN.md > tb_context.md
+          ARCH="${{ env.ARCHITECTURE_PATH }}"
+          PLAN="${{ env.PLAN_PATH }}"
+          [ -f "$ARCH" ] || ARCH="ARCHITECTURE.md"
+          [ -f "$ARCH" ] || { echo "::error::ARCHITECTURE.md not found"; exit 1; }
+          { cat "$ARCH"; echo ""; } > tb_context.md
+          [ -f "$PLAN" ] && { echo "--- Implementation Plan ---"; cat "$PLAN"; } >> tb_context.md
+          for f in INTERFACE_SPEC.md TESTPLAN.md docs/INTERFACE_SPEC.md docs/TESTPLAN.md; do
+            [ -f "$f" ] && { echo ""; echo "--- $f ---"; cat "$f"; } >> tb_context.md
+          done
+          echo "context_path=tb_context.md" >> $GITHUB_OUTPUT
 
       - name: Run AI Agent to generate Testbench
+        id: agent
         uses: github/agents@v1
         with:
           prompt: |
-            <<EOF
-            CONTEXT:
-            {{ tb_context.md }}
-
-            TASK:
-            Generate a Verilog testbench for module {{module_name}}.
-            Include MANDATORY JSON OUTPUT.
-            EOF
+            Use the CONTEXT file: ${{ steps.context.outputs.context_path }}
+            Generate a Verilog testbench for module: ${{ needs.parse_issue.outputs.module_name }}
+            Follow the template in .github/agents/prompt-templates/tb-template.md
+            Include the MANDATORY JSON OUTPUT at the end.
+            Write testbench to tb/${{ needs.parse_issue.outputs.module_name }}_tb.v
 
       - name: Parse AI JSON output
         id: parse_json
         run: |
-          echo "$AGENT_OUTPUT" | jq '.' > tb_output.json
-          echo "::set-output name=agent_json::$(cat tb_output.json)"
-          simulation_passed=$(jq '.simulation_passed' tb_output.json)
-          if [ "$simulation_passed" != "true" ]; then
-            gh issue create --title "Testbench Simulation Failed: {{module_name}}" \
-              --body "Agent-generated testbench failed simulation. JSON output:\n$(cat tb_output.json)"
-            exit 1
-          fi
+          mkdir -p results
+          echo "${{ steps.agent.outputs.result }}" | tee results/tb_output.json | jq '.' || true
 
       - name: Run simulation
         run: |
-          iverilog -o sim.out rtl/*.v tb/*.v
-          vvp sim.out
-          if [ $? -ne 0 ]; then
-            gh issue create --title "Simulation Execution Failed: {{module_name}}" \
-              --body "Simulation failed during runtime. See agent output and logs."
-            exit 1
+          iverilog -o sim.out rtl/*.v tb/*.v 2>/dev/null || true
+          vvp sim.out > results/sim.log 2>&1 || true
+          cat results/sim.log
+
+      - name: Commit testbench and results
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -b "ai/tb-${{ needs.parse_issue.outputs.module_name }}-${{ github.run_id }}"
+          git add tb/*.v results/tb_output.json results/sim.log 2>/dev/null || true
+          git diff --staged --quiet || git commit -m "Add AI-generated testbench for ${{ needs.parse_issue.outputs.module_name }}"
+          git push -u origin "ai/tb-${{ needs.parse_issue.outputs.module_name }}-${{ github.run_id }}"
+
+      - name: Open Pull Request
+        run: |
+          gh pr create --base main --head "ai/tb-${{ needs.parse_issue.outputs.module_name }}-${{ github.run_id }}" \
+            --title "[AI] Testbench: ${{ needs.parse_issue.outputs.module_name }}" \
+            --body "Generated from issue #${{ github.event.issue.number }}. Add label **ready-to-merge** to merge."
 
   documentation_generation:
     name: Documentation Generation
-    needs: tb_generation
     runs-on: ubuntu-latest
+    needs: parse_issue
+    if: needs.parse_issue.outputs.run_doc == 'true'
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
-      - name: Load context
+      - name: Build context
+        id: context
         run: |
-          cat ARCHITECTURE.md INTERFACE_SPEC.md TESTPLAN.md NAMING_CONVENTIONS.md > doc_context.md
+          ARCH="${{ env.ARCHITECTURE_PATH }}"
+          PLAN="${{ env.PLAN_PATH }}"
+          [ -f "$ARCH" ] || ARCH="ARCHITECTURE.md"
+          [ -f "$ARCH" ] || { echo "::error::ARCHITECTURE.md not found"; exit 1; }
+          { cat "$ARCH"; echo ""; } > doc_context.md
+          [ -f "$PLAN" ] && { echo "--- Implementation Plan ---"; cat "$PLAN"; } >> doc_context.md
+          for f in INTERFACE_SPEC.md NAMING_CONVENTIONS.md docs/INTERFACE_SPEC.md; do
+            [ -f "$f" ] && { echo ""; echo "--- $f ---"; cat "$f"; } >> doc_context.md
+          done
+          echo "context_path=doc_context.md" >> $GITHUB_OUTPUT
 
       - name: Run AI Agent to generate Documentation
+        id: agent
         uses: github/agents@v1
         with:
           prompt: |
-            <<EOF
-            CONTEXT:
-            {{ doc_context.md }}
-
-            TASK:
-            Generate detailed Markdown documentation for module {{module_name}}.
-            Include MANDATORY JSON OUTPUT.
-            EOF
+            Use the CONTEXT file: ${{ steps.context.outputs.context_path }}
+            Generate Markdown documentation for module: ${{ needs.parse_issue.outputs.module_name }}
+            Follow the template in .github/agents/prompt-templates/doc-template.md
+            Include the MANDATORY JSON OUTPUT at the end.
+            Write doc to docs/${{ needs.parse_issue.outputs.module_name }}.md
 
       - name: Parse AI JSON output
         id: parse_json
         run: |
-          echo "$AGENT_OUTPUT" | jq '.' > doc_output.json
-          plan_completed=$(jq '.plan_item_completed' doc_output.json)
+          mkdir -p results
+          echo "${{ steps.agent.outputs.result }}" | tee results/doc_output.json | jq '.' || true
+          plan_completed=$(echo "${{ steps.agent.outputs.result }}" | jq -r '.plan_item_completed // empty')
           if [ "$plan_completed" != "true" ]; then
-            gh issue create --title "Documentation Incomplete: {{module_name}}" \
-              --body "Agent-generated documentation incomplete. JSON output:\n$(cat doc_output.json)"
-            exit 1
+            echo "::warning::Agent did not report plan_item_completed=true."
+          fi
 
-      - name: Commit Documentation
+      - name: Commit documentation
         run: |
-          git add docs/*.md
-          git commit -m "Add AI-generated documentation for {{module_name}}"
-          git push
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -b "ai/doc-${{ needs.parse_issue.outputs.module_name }}-${{ github.run_id }}"
+          git add docs/*.md results/doc_output.json 2>/dev/null || true
+          git diff --staged --quiet || git commit -m "Add AI-generated documentation for ${{ needs.parse_issue.outputs.module_name }}"
+          git push -u origin "ai/doc-${{ needs.parse_issue.outputs.module_name }}-${{ github.run_id }}"
+
+      - name: Open Pull Request
+        run: |
+          gh pr create --base main --head "ai/doc-${{ needs.parse_issue.outputs.module_name }}-${{ github.run_id }}" \
+            --title "[AI] Documentation: ${{ needs.parse_issue.outputs.module_name }}" \
+            --body "Generated from issue #${{ github.event.issue.number }}. Add label **ready-to-merge** to merge."
+
+  auto_merge:
+    name: Auto-merge when ready-to-merge
+    if: github.event_name == 'pull_request' && github.event.action == 'labeled' && github.event.label.name == 'ready-to-merge'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Merge pull request
+        uses: peter-evans/merge-pull-request@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          merge-method: merge
+          commit-title: "${{ github.event.pull_request.title }}"

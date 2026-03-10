@@ -1,27 +1,14 @@
-# ARCHITECTURE.md
+# Architecture Reference (for Agents)
 
-## Project Overview
-- Brief description of the design purpose.
-- High-level functional summary.
+The **authoritative architecture** is in the repo at **`docs/ARCHITECTURE.md`** (or root **`ARCHITECTURE.md`**). The workflow injects that file into the agent context. This file is only a structural reference.
 
-## Functional Blocks / Modules
-- Module A: <Short description>
-- Module B: <Short description>
-- Module C: <Short description>
+## Expected sections in docs/ARCHITECTURE.md
 
-## Interfaces
-- Input signals: <list with width, direction, purpose>
-- Output signals: <list with width, direction, purpose>
-- Any clock/reset info
+- **Project Overview** – design purpose and high-level summary
+- **Functional Blocks / Modules** – list of modules and short descriptions
+- **Interfaces** – inputs, outputs, widths, directions, clock/reset
+- **Timing / Protocols / Constraints** – clocks, latency, protocols (e.g. AXI, custom)
+- **Block Diagram** – ASCII or Markdown diagram of module connections
+- **Notes** – assumptions and links to external specs
 
-## Timing / Protocols / Constraints
-- Clocks and frequencies
-- Latency or timing constraints
-- Protocol references (e.g., AXI, PCIe, custom)
-
-## Block Diagram
-[Insert ASCII or text-based diagram here showing module interconnections]
-
-## Notes
-- Any assumptions or references for AI
-- Links to external specification documents
+Agents must use the project’s `ARCHITECTURE.md` as the single source of truth for interfaces and structure.
